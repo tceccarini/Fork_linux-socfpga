@@ -3,8 +3,6 @@
  * FPGAlix - Intel/Altera Cyclone V SoC Board
  * Device: 5CSEMA5F31C6
  *
- * Generated from soc_system.sopcinfo (Platform Designer 22.1, 2026-04-23)
- *
  * HPS peripherals enabled:
  *   - EMAC1     : RGMII
  *   - USB1      : SDR (USB 2.0 OTG)
@@ -17,13 +15,17 @@
  *
  * FPGA peripherals (LW HPS-to-FPGA bridge @ 0xFF200000):
  *   - LED PIO      : 10-bit output  @ 0xFF200120
- *   - Button PIO   :  4-bit input   @ 0xFF200110  (falling-edge IRQ, F2H[1] = GIC SPI 73)
- *   - DIP-SW PIO   : 10-bit input   @ 0xFF200100  (any-edge IRQ,    F2H[2] = GIC SPI 74)
- *   - JTAG UART    :                @ 0xFF200138  (IRQ,             F2H[0] = GIC SPI 72)
+ *   - Button PIO   :  4-bit input   @ 0xFF200110  (falling-edge IRQ, F2H[1] = GIC SPI 41)
+ *   - DIP-SW PIO   : 10-bit input   @ 0xFF200100  (any-edge IRQ,    F2H[0] = GIC SPI 40)
+ *   - JTAG UART    :                @ 0xFF200138  (IRQ,             F2H[2] = GIC SPI 42)
  *   - System ID    :                @ 0xFF200130
+ *   - mSGDMA       : CSR            @ 0xFF202000  (IRQ,             F2H[3] = GIC SPI 43)
  *
  * FPGA peripherals (HPS-to-FPGA bridge @ 0xC0000000):
  *   - On-chip SRAM : 64 KB          @ 0xC1000000
+ *
+ * HPS GPIO:
+ *   - HPS_LED      : GPIO1[24] / pin A24  -> heartbeat
  */
 
 #include "socfpga_cyclone5.dtsi"
@@ -50,9 +52,6 @@
 		spi0      = &spi1;
 	};
 
-	/* ----------------------------------------------------------------
-	 * Fixed regulators
-	 * ---------------------------------------------------------------- */
 	regulator_3_3v: regulator-3v3 {
 		compatible = "regulator-fixed";
 		regulator-name = "VCC3P3";
@@ -61,9 +60,6 @@
 		regulator-always-on;
 	};
 
-	/* ----------------------------------------------------------------
-	 * FPGA LED PIO  –  10 red LEDs  (LEDR[9:0])
-	 * ---------------------------------------------------------------- */
 	leds {
 		compatible = "gpio-leds";
 
@@ -76,13 +72,15 @@
 		led6 { label = "fpga:red:6"; gpios = <&led_pio 6 0>; default-state = "off"; };
 		led7 { label = "fpga:red:7"; gpios = <&led_pio 7 0>; default-state = "off"; };
 		led8 { label = "fpga:red:8"; gpios = <&led_pio 8 0>; default-state = "off"; };
-		led9 { label = "fpga:red:9"; gpios = <&led_pio 9 0>; default-state = "off"; linux,default-trigger = "heartbeat"; };
+		led9 { label = "fpga:red:9"; gpios = <&led_pio 9 0>; default-state = "off"; };
+
+		hps_led {
+			label = "hps:green:led";
+			gpios = <&portb 24 0>; /* HPS GPIO1[24] - pin A24 */
+			linux,default-trigger = "heartbeat";
+		};
 	};
 
-	/* ----------------------------------------------------------------
-	 * FPGA Button PIO  –  4 push-buttons  KEY[3:0] (active-low)
-	 * FPGA DIP-SW PIO  –  10 slide switches SW[9:0]
-	 * ---------------------------------------------------------------- */
 	gpio-keys {
 		compatible = "gpio-keys";
 		#address-cells = <1>;
@@ -90,15 +88,15 @@
 
 		button@0 {
 			label = "fpga_key0";
-			linux,code = <0x100>; /* BTN_0 */
-			gpios = <&button_pio 0 1>; /* active-low */
+			linux,code = <0x100>;
+			gpios = <&button_pio 0 1>;
 			interrupt-parent = <&button_pio>;
 			interrupts = <0>;
 			debounce-interval = <50>;
 		};
 		button@1 {
 			label = "fpga_key1";
-			linux,code = <0x101>; /* BTN_1 */
+			linux,code = <0x101>;
 			gpios = <&button_pio 1 1>;
 			interrupt-parent = <&button_pio>;
 			interrupts = <1>;
@@ -106,7 +104,7 @@
 		};
 		button@2 {
 			label = "fpga_key2";
-			linux,code = <0x102>; /* BTN_2 */
+			linux,code = <0x102>;
 			gpios = <&button_pio 2 1>;
 			interrupt-parent = <&button_pio>;
 			interrupts = <2>;
@@ -114,93 +112,23 @@
 		};
 		button@3 {
 			label = "fpga_key3";
-			linux,code = <0x103>; /* BTN_3 */
+			linux,code = <0x103>;
 			gpios = <&button_pio 3 1>;
 			interrupt-parent = <&button_pio>;
 			interrupts = <3>;
 			debounce-interval = <50>;
 		};
 
-		switch@0 {
-			label = "fpga_sw0";
-			linux,code = <0x200>; /* SW_0 */
-			linux,input-type = <5>; /* EV_SW */
-			gpios = <&dipsw_pio 0 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <0>;
-		};
-		switch@1 {
-			label = "fpga_sw1";
-			linux,code = <0x201>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 1 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <1>;
-		};
-		switch@2 {
-			label = "fpga_sw2";
-			linux,code = <0x202>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 2 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <2>;
-		};
-		switch@3 {
-			label = "fpga_sw3";
-			linux,code = <0x203>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 3 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <3>;
-		};
-		switch@4 {
-			label = "fpga_sw4";
-			linux,code = <0x204>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 4 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <4>;
-		};
-		switch@5 {
-			label = "fpga_sw5";
-			linux,code = <0x205>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 5 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <5>;
-		};
-		switch@6 {
-			label = "fpga_sw6";
-			linux,code = <0x206>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 6 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <6>;
-		};
-		switch@7 {
-			label = "fpga_sw7";
-			linux,code = <0x207>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 7 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <7>;
-		};
-		switch@8 {
-			label = "fpga_sw8";
-			linux,code = <0x208>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 8 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <8>;
-		};
-		switch@9 {
-			label = "fpga_sw9";
-			linux,code = <0x209>;
-			linux,input-type = <5>;
-			gpios = <&dipsw_pio 9 0>;
-			interrupt-parent = <&dipsw_pio>;
-			interrupts = <9>;
-		};
+		switch@0  { label = "fpga_sw0";  linux,code = <0x200>; linux,input-type = <5>; gpios = <&dipsw_pio 0 0>; interrupt-parent = <&dipsw_pio>; interrupts = <0>; };
+		switch@1  { label = "fpga_sw1";  linux,code = <0x201>; linux,input-type = <5>; gpios = <&dipsw_pio 1 0>; interrupt-parent = <&dipsw_pio>; interrupts = <1>; };
+		switch@2  { label = "fpga_sw2";  linux,code = <0x202>; linux,input-type = <5>; gpios = <&dipsw_pio 2 0>; interrupt-parent = <&dipsw_pio>; interrupts = <2>; };
+		switch@3  { label = "fpga_sw3";  linux,code = <0x203>; linux,input-type = <5>; gpios = <&dipsw_pio 3 0>; interrupt-parent = <&dipsw_pio>; interrupts = <3>; };
+		switch@4  { label = "fpga_sw4";  linux,code = <0x204>; linux,input-type = <5>; gpios = <&dipsw_pio 4 0>; interrupt-parent = <&dipsw_pio>; interrupts = <4>; };
+		switch@5  { label = "fpga_sw5";  linux,code = <0x205>; linux,input-type = <5>; gpios = <&dipsw_pio 5 0>; interrupt-parent = <&dipsw_pio>; interrupts = <5>; };
+		switch@6  { label = "fpga_sw6";  linux,code = <0x206>; linux,input-type = <5>; gpios = <&dipsw_pio 6 0>; interrupt-parent = <&dipsw_pio>; interrupts = <6>; };
+		switch@7  { label = "fpga_sw7";  linux,code = <0x207>; linux,input-type = <5>; gpios = <&dipsw_pio 7 0>; interrupt-parent = <&dipsw_pio>; interrupts = <7>; };
+		switch@8  { label = "fpga_sw8";  linux,code = <0x208>; linux,input-type = <5>; gpios = <&dipsw_pio 8 0>; interrupt-parent = <&dipsw_pio>; interrupts = <8>; };
+		switch@9  { label = "fpga_sw9";  linux,code = <0x209>; linux,input-type = <5>; gpios = <&dipsw_pio 9 0>; interrupt-parent = <&dipsw_pio>; interrupts = <9>; };
 	};
 };
 
@@ -208,69 +136,38 @@
  * HPS Peripherals
  * ==================================================================== */
 
-/* EMAC1  –  Gigabit Ethernet via RGMII
- * NOTE: adjust *-skew-ps values to match your PCB layout / PHY datasheet */
 &gmac1 {
 	status = "okay";
 	phy-mode = "rgmii";
-
-	txd0-skew-ps = <0>;   
-	txd1-skew-ps = <0>;
-	txd2-skew-ps = <0>;
-	txd3-skew-ps = <0>;
-	rxd0-skew-ps = <0>;  
-	rxd1-skew-ps = <0>;
-	rxd2-skew-ps = <0>;
-	rxd3-skew-ps = <0>;
+	txd0-skew-ps = <0>; txd1-skew-ps = <0>; txd2-skew-ps = <0>; txd3-skew-ps = <0>;
+	rxd0-skew-ps = <0>; rxd1-skew-ps = <0>; rxd2-skew-ps = <0>; rxd3-skew-ps = <0>;
 	txen-skew-ps = <0>;
-	txc-skew-ps  = <1800>; 
+	txc-skew-ps  = <1800>;
 	rxdv-skew-ps = <0>;
-	rxc-skew-ps  = <1800>; 
-
+	rxc-skew-ps  = <1800>;
 	max-frame-size = <3800>;
 };
 
-/* UART0  –  serial console @ 115200 8N1 */
-&uart0 {
-	status = "okay";
-};
+&uart0 { status = "okay"; };
 
-/* USB1  –  USB 2.0 OTG (ULPI SDR) */
 &usb1 {
 	status = "okay";
 	dr_mode = "otg";
 };
 
-/* I2C0 */
-&i2c0 {
-	status = "okay";
-	clock-frequency = <100000>;
-};
+&i2c0 { status = "okay"; clock-frequency = <100000>; };
+&i2c1 { status = "okay"; clock-frequency = <100000>; };
 
-/* I2C1 */
-&i2c1 {
-	status = "okay";
-	clock-frequency = <100000>;
-};
+&spi1 { status = "okay"; num-cs = <1>; };
 
-/* SPIM1  –  SPI master 1, single slave select */
-&spi1 {
-	status = "okay";
-	num-cs = <1>;
-};
-
-/* SDMMC  –  SD card, 4-bit mode */
 &mmc0 {
 	vmmc-supply  = <&regulator_3_3v>;
 	vqmmc-supply = <&regulator_3_3v>;
 	status = "okay";
 };
 
-/* QSPI  –  Quad-SPI NOR flash, 1 slave select
- * Replace "jedec,spi-nor" with your specific flash compatible if needed */
 &qspi {
 	status = "okay";
-
 	flash0: flash@0 {
 		#address-cells = <1>;
 		#size-cells    = <1>;
@@ -279,7 +176,6 @@
 		spi-max-frequency = <100000000>;
 		spi-tx-bus-width  = <4>;
 		spi-rx-bus-width  = <4>;
-
 		cdns,read-delay = <4>;
 		cdns,tshsl-ns   = <50>;
 		cdns,tsd2d-ns   = <50>;
@@ -288,46 +184,22 @@
 	};
 };
 
-/* HPS GPIO banks */
-&gpio0 {
-	status = "okay";
-};
-
-&gpio1 {
-	status = "okay";
-};
-
-&gpio2 {
-	status = "okay";
-};
+&gpio0 { status = "okay"; };
+&gpio1 { status = "okay"; };
+&gpio2 { status = "okay"; };
 
 /* ====================================================================
  * FPGA Bridges
  * ==================================================================== */
 
-/* LW HPS-to-FPGA bridge controller */
-&fpga_bridge0 {
-	status = "okay";
-};
-
-/* HPS-to-FPGA bridge controller */
-&fpga_bridge1 {
-	status = "okay";
-};
-
-/* FPGA-to-HPS bridge controller */
-&fpga_bridge2 {
-	status = "okay";
-};
+&fpga_bridge0 { status = "okay"; };
+&fpga_bridge1 { status = "okay"; };
+&fpga_bridge2 { status = "okay"; };
 
 /* ====================================================================
- * FPGA Region  –  children at their physical bus addresses
- *
- * ranges entry format: <child-phys  parent-phys  size>
- *
- *   LW H2F window : CPU 0xFF200000, size 2 MB   -> FPGA offset 0x000000
- *   H2F  window   : CPU 0xC0000000, size 512 MB -> FPGA offset 0x000000
+ * FPGA Region
  * ==================================================================== */
+
 &base_fpga_region {
 	fpga-bridges = <&fpga_bridge0>, <&fpga_bridge1>, <&fpga_bridge2>;
 
@@ -336,27 +208,20 @@
 	ranges = <0xff200000 0xff200000 0x00200000>,
 	         <0xc0000000 0xc0000000 0x20000000>;
 
-	/* ------------------------------------------------------------------
-	 * LW H2F peripherals  (Platform Designer mm_bridge_0 @ 0xFF200000)
-	 * ------------------------------------------------------------------ */
-
-	/* JTAG UART – altera_avalon_jtag_uart
-	 * IRQ: F2H_IRQ[0] -> GIC SPI 72 */
+	/* JTAG UART – F2H[2] -> GIC SPI 42 */
 	jtag_uart: serial@ff200138 {
 		compatible = "altr,juart-1.0";
 		reg = <0xff200138 0x8>;
 		interrupt-parent = <&intc>;
-		interrupts = <0 72 4>;
+		interrupts = <0 42 4>;
 	};
 
-	/* System ID – altera_avalon_sysid_qsys */
 	sysid: sysid@ff200130 {
 		compatible = "altr,sysid-1.0";
 		reg = <0xff200130 0x8>;
 	};
 
-	/* LED PIO – altera_avalon_pio, 10-bit output (LEDR[9:0])
-	 * No hardware interrupt; output-only bank */
+	/* LED PIO – 10-bit output, no interrupt */
 	led_pio: gpio@ff200120 {
 		compatible = "altr,pio-1.0";
 		reg = <0xff200120 0x10>;
@@ -365,42 +230,47 @@
 		#gpio-cells = <2>;
 	};
 
-	/* Button PIO – altera_avalon_pio, 4-bit input (KEY[3:0], active-low)
-	 * Falling-edge IRQ: F2H_IRQ[1] -> GIC SPI 73 */
+	/* Button PIO – F2H[1] -> GIC SPI 41 */
 	button_pio: gpio@ff200110 {
 		compatible = "altr,pio-1.0";
 		reg = <0xff200110 0x10>;
 		altr,gpio-bank-width = <4>;
-		altr,interrupt-type  = <2>; /* IRQ_TYPE_EDGE_FALLING */
+		altr,interrupt-type  = <2>;
 		gpio-controller;
 		#gpio-cells = <2>;
 		interrupt-controller;
 		#interrupt-cells = <1>;
 		interrupt-parent = <&intc>;
-		interrupts = <0 73 4>;
+		interrupts = <0 41 4>;
 	};
 
-	/* DIP-Switch PIO – altera_avalon_pio, 10-bit input (SW[9:0])
-	 * Any-edge IRQ: F2H_IRQ[2] -> GIC SPI 74 */
+	/* DIP-Switch PIO – F2H[0] -> GIC SPI 40 */
 	dipsw_pio: gpio@ff200100 {
 		compatible = "altr,pio-1.0";
 		reg = <0xff200100 0x10>;
 		altr,gpio-bank-width = <10>;
-		altr,interrupt-type  = <3>; /* IRQ_TYPE_EDGE_BOTH */
+		altr,interrupt-type  = <3>;
 		gpio-controller;
 		#gpio-cells = <2>;
 		interrupt-controller;
 		#interrupt-cells = <1>;
 		interrupt-parent = <&intc>;
-		interrupts = <0 74 4>;
+		interrupts = <0 40 4>;
 	};
 
-	/* ------------------------------------------------------------------
-	 * H2F peripherals  (altera_avalon_onchip_memory2, 64 KB)
-	 * ------------------------------------------------------------------ */
+	/* mSGDMA – F2H[3] -> GIC SPI 43 */
+	msgdma: dma-controller@ff202000 {
+		compatible = "altr,socfpga-msgdma";
+		reg = <0xff202000 0x20>,
+		      <0xff202020 0x20>,
+		      <0xff202040 0x08>;
+		reg-names = "csr", "desc", "resp";
+		interrupt-parent = <&intc>;
+		interrupts = <0 43 4>;
+		#dma-cells = <1>;
+	};
 
-	/* On-chip SRAM: 64 KB at FPGA offset 0x01000000
-	 * CPU physical address: 0xC1000000 */
+	/* On-chip SRAM – 64 KB */
 	onchip_sram: sram@c1000000 {
 		compatible = "mmio-sram";
 		reg = <0xc1000000 0x10000>;
