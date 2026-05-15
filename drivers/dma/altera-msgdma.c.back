@@ -283,7 +283,6 @@ static void msgdma_desc_config(struct msgdma_extended_desc *desc,
 	 * for the "last" descriptor
 	 */
 	desc->control = MSGDMA_DESC_CTL_TR_ERR_IRQ | MSGDMA_DESC_CTL_GO |
-		MSGDMA_DESC_CTL_END_ON_EOP |
 		MSGDMA_DESC_CTL_END_ON_LEN;
 }
 
