@@ -579,21 +579,33 @@ static void msgdma_issue_pending(struct dma_chan *chan)
 
 /**
  * msgdma_chan_desc_cleanup - Cleanup the completed descriptors
- * @mdev: Pointer to the Altera mSGDMA device structure
+ * @mdev:            Pointer to the Altera mSGDMA device structure
+ * @bytes_xferred:   Actual bytes transferred (from response FIFO)
+ * @resp_status:     Response status word (from response FIFO)
  */
-static void msgdma_chan_desc_cleanup(struct msgdma_device *mdev)
+static void msgdma_chan_desc_cleanup(struct msgdma_device *mdev,
+				     u32 bytes_xferred, u32 resp_status)
 {
 	struct msgdma_sw_desc *desc, *next;
 
 	list_for_each_entry_safe(desc, next, &mdev->done_list, node) {
 		struct dmaengine_desc_callback cb;
+		struct dmaengine_result result;
 
 		list_del(&desc->node);
+
+		result.result   = DMA_TRANS_NOERROR;
+		result.residue  = 0;
+
+		/* Populate residue when Avalon-ST EOP arrived before the
+		 * buffer was full (early termination). */
+		if ((resp_status & MSGDMA_RESP_EARLY_TERM) && mdev->resp)
+			result.residue = desc->hw_desc.len - bytes_xferred;
 
 		dmaengine_desc_get_callback(&desc->async_tx, &cb);
 		if (dmaengine_desc_callback_valid(&cb)) {
 			spin_unlock(&mdev->lock);
-			dmaengine_desc_callback_invoke(&cb, NULL);
+			dmaengine_desc_callback_invoke(&cb, &result);
 			spin_lock(&mdev->lock);
 		}
 
@@ -700,21 +712,27 @@ static void msgdma_tasklet(struct tasklet_struct *t)
 	}
 
 	while (count--) {
+		size   = 0;
+		status = 0;
+
 		/*
-		 * Read both longwords to purge this response from the FIFO
-		 * On Avalon-MM implementations, size and status do not
-		 * have any real values, like transferred bytes or error
-		 * bits. So we need to just drop these values.
+		 * Read both longwords to purge this response from the FIFO.
+		 * On Avalon-ST S2MM transfers, BYTES_TRANSFERRED holds the
+		 * actual number of bytes written and STATUS bit 8 (EARLY_TERM)
+		 * is set when an EOP arrived before the buffer was full.
+		 * On Avalon-MM implementations these fields carry no useful
+		 * information, but reading them is still required to advance
+		 * the response FIFO.
 		 */
 		if (mdev->resp) {
-			size = ioread32(mdev->resp +
-					MSGDMA_RESP_BYTES_TRANSFERRED);
+			size   = ioread32(mdev->resp +
+					  MSGDMA_RESP_BYTES_TRANSFERRED);
 			status = ioread32(mdev->resp +
-					MSGDMA_RESP_STATUS);
+					  MSGDMA_RESP_STATUS);
 		}
 
 		msgdma_complete_descriptor(mdev);
-		msgdma_chan_desc_cleanup(mdev);
+		msgdma_chan_desc_cleanup(mdev, size, status);
 	}
 
 	spin_unlock_irqrestore(&mdev->lock, flags);
