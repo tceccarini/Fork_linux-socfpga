@@ -597,9 +597,12 @@ static void msgdma_chan_desc_cleanup(struct msgdma_device *mdev,
 		result.result   = DMA_TRANS_NOERROR;
 		result.residue  = 0;
 
-		/* Populate residue when Avalon-ST EOP arrived before the
-		 * buffer was full (early termination). */
-		if ((resp_status & MSGDMA_RESP_EARLY_TERM) && mdev->resp)
+		/* Populate residue when fewer bytes were transferred than
+		 * requested — Avalon-ST EOP arrived before the buffer was full.
+		 * Note: the EARLY_TERM status bit is not set by all mSGDMA IP
+		 * versions; use bytes_xferred directly instead. */
+		if (mdev->resp && bytes_xferred > 0 &&
+		    bytes_xferred < desc->hw_desc.len)
 			result.residue = desc->hw_desc.len - bytes_xferred;
 
 		dmaengine_desc_get_callback(&desc->async_tx, &cb);
