@@ -487,8 +487,13 @@ static void msgdma_reset(struct msgdma_device *mdev)
 	/* Clear all status bits */
 	iowrite32(MSGDMA_CSR_STAT_MASK, mdev->csr + MSGDMA_CSR_STATUS);
 
-	/* Enable the DMA controller including interrupts */
-	iowrite32(MSGDMA_CSR_CTL_STOP_ON_ERR | MSGDMA_CSR_CTL_STOP_ON_EARLY |
+	/* Enable the DMA controller including interrupts.
+	 * Do NOT set STOP_ON_EARLY_TERMINATION: with END_ON_EOP enabled on
+	 * descriptors the hardware would halt the dispatcher on every short
+	 * frame (EOP before buffer full), stalling the pipeline.  Short frames
+	 * are instead reported via the response FIFO residue field and handled
+	 * in software. */
+	iowrite32(MSGDMA_CSR_CTL_STOP_ON_ERR |
 		  MSGDMA_CSR_CTL_GLOBAL_INTR, mdev->csr + MSGDMA_CSR_CONTROL);
 
 	mdev->idle = true;
@@ -672,13 +677,24 @@ static int msgdma_alloc_chan_resources(struct dma_chan *dchan)
 	struct msgdma_sw_desc *desc;
 	int i;
 
+	/* Full hardware reset between sessions: clears STOP_DISPATCHER,
+	 * drains the response FIFO, and re-enables interrupts. */
+	msgdma_reset(mdev);
+
 	mdev->sw_desq = kcalloc(MSGDMA_DESC_NUM, sizeof(*desc), GFP_NOWAIT);
 	if (!mdev->sw_desq)
 		return -ENOMEM;
 
-	mdev->idle = true;
 	mdev->desc_free_cnt = MSGDMA_DESC_NUM;
 
+	/* Re-initialize all lists: free_chan_resources may have left
+	 * active_list/pending_list/done_list with dangling pointers if the
+	 * previous session ended with descriptors still in flight (e.g. after
+	 * a wait_idle timeout).  alloc_chan_resources is the canonical place
+	 * to establish a clean software state for the new session. */
+	INIT_LIST_HEAD(&mdev->active_list);
+	INIT_LIST_HEAD(&mdev->pending_list);
+	INIT_LIST_HEAD(&mdev->done_list);
 	INIT_LIST_HEAD(&mdev->free_list);
 
 	for (i = 0; i < MSGDMA_DESC_NUM; i++) {
