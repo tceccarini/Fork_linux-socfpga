@@ -20,6 +20,10 @@
  *   - JTAG UART    :                @ 0xFF200138  (IRQ,             F2H[2] = GIC SPI 42)
  *   - System ID    :                @ 0xFF200130
  *   - mSGDMA       : CSR            @ 0xFF202000  (IRQ,             F2H[3] = GIC SPI 43)
+ *   - Hex Display Controller       @ 0xFF200140
+ *   - OV7670 I2C Master            @ 0xFF200180  (IRQ,             F2H[4] = GIC SPI 44)
+ *   - PCLK Reset Controller        @ 0xFF2001C0
+ *   - OV7670 Data Interface        @ 0xFF200400  (via MM Clock Crossing Bridge)
  *
  * FPGA peripherals (HPS-to-FPGA bridge @ 0xC0000000):
  *   - On-chip SRAM : 64 KB          @ 0xC1000000
@@ -139,6 +143,7 @@
 &gmac1 {
 	status = "okay";
 	phy-mode = "rgmii";
+	phy-handle = <&phy0>;
 	txd0-skew-ps = <0>; txd1-skew-ps = <0>; txd2-skew-ps = <0>; txd3-skew-ps = <0>;
 	rxd0-skew-ps = <0>; rxd1-skew-ps = <0>; rxd2-skew-ps = <0>; rxd3-skew-ps = <0>;
 	txen-skew-ps = <0>;
@@ -146,6 +151,16 @@
 	rxdv-skew-ps = <0>;
 	rxc-skew-ps  = <1800>;
 	max-frame-size = <3800>;
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		phy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-id0022.1610";
+			reg = <0>;
+			micrel,led-mode = <1>;  /* LED0 = Link+Activity (blinks on traffic) */
+		};
+	};
 };
 
 &uart0 { status = "okay"; };
@@ -268,6 +283,35 @@
 		interrupt-parent = <&intc>;
 		interrupts = <0 43 4>;
 		#dma-cells = <1>;
+	};
+
+	/* Hex Display Controller */
+	hex_display: hex-display-controller@ff200140 {
+		compatible = "fpgalix,hex-display-controller-1.0";
+		reg = <0xff200140 0x4>;
+	};
+
+	/* OV7670 I2C Master – F2H[4] -> GIC SPI 44 */
+	i2c_ov7670: i2c@ff200180 {
+		compatible = "altr,softip-i2c-v1.0";
+		reg = <0xff200180 0x20>;
+		interrupt-parent = <&intc>;
+		interrupts = <0 44 4>;
+		clock-frequency = <100000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	/* PCLK Reset Controller – controls pclk domain reset via software */
+	pclk_reset_ctrl: pclk-reset-controller@ff2001c0 {
+		compatible = "fpgalix,pclk-reset-controller-1.0";
+		reg = <0xff2001c0 0x4>;
+	};
+
+	/* OV7670 Data Interface – via MM Clock Crossing Bridge */
+	ov7670_if: ov7670-data-interface@ff200400 {
+		compatible = "fpgalix,ov7670-data-interface-1.0";
+		reg = <0xff200400 0x8>;
 	};
 
 	/* On-chip SRAM – 64 KB */
